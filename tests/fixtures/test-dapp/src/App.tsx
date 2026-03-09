@@ -1,63 +1,58 @@
 import { useState } from 'react';
-import {
-  ConnectButton,
-  useCurrentAccount,
-  useSignAndExecuteTransaction,
-  useSignPersonalMessage,
-} from '@mysten/dapp-kit';
+import { useCurrentAccount, useDAppKit } from '@mysten/dapp-kit-react';
+import { ConnectButton } from '@mysten/dapp-kit-react/ui';
 import { Transaction } from '@mysten/sui/transactions';
+import { useMutation } from '@tanstack/react-query';
 
 export function App() {
   const account = useCurrentAccount();
-  const { mutate: signAndExecute, isPending: isTxPending } =
-    useSignAndExecuteTransaction();
-  const { mutate: signMessage, isPending: isMsgPending } =
-    useSignPersonalMessage();
+  const dAppKit = useDAppKit();
 
   const [txResult, setTxResult] = useState<string | null>(null);
   const [msgResult, setMsgResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const handleSignTx = () => {
-    setError(null);
-    setTxResult(null);
+  const { mutate: signAndExecute, isPending: isTxPending } = useMutation({
+    mutationFn: async () => {
+      const tx = new Transaction();
+      // Split 1000 MIST from gas and transfer to self (no-op but exercises signing)
+      const [coin] = tx.splitCoins(tx.gas, [1000]);
+      tx.transferObjects([coin], account!.address);
 
-    const tx = new Transaction();
-    // Split 1000 MIST from gas and transfer to self (no-op but exercises signing)
-    const [coin] = tx.splitCoins(tx.gas, [1000]);
-    tx.transferObjects([coin], account!.address);
+      const result = await dAppKit.signAndExecuteTransaction({
+        transaction: tx,
+      });
 
-    signAndExecute(
-      { transaction: tx },
-      {
-        onSuccess: (result) => {
-          setTxResult(JSON.stringify(result, null, 2));
-        },
-        onError: (err) => {
-          setError(err.message);
-        },
-      },
-    );
-  };
+      if (result.$kind === 'FailedTransaction') {
+        throw new Error('Transaction failed');
+      }
 
-  const handleSignMessage = () => {
-    setError(null);
-    setMsgResult(null);
+      return result;
+    },
+    onSuccess: (result) => {
+      setTxResult(JSON.stringify(result, null, 2));
+      setError(null);
+    },
+    onError: (err: Error) => {
+      setError(err.message);
+      setTxResult(null);
+    },
+  });
 
-    const message = new TextEncoder().encode('Hello from Playwright Test Wallet!');
-
-    signMessage(
-      { message },
-      {
-        onSuccess: (result) => {
-          setMsgResult(JSON.stringify(result, null, 2));
-        },
-        onError: (err) => {
-          setError(err.message);
-        },
-      },
-    );
-  };
+  const { mutate: signMessage, isPending: isMsgPending } = useMutation({
+    mutationFn: async () => {
+      const message = new TextEncoder().encode('Hello from Playwright Test Wallet!');
+      return await dAppKit.signPersonalMessage({ message });
+    },
+    onSuccess: (result) => {
+      setMsgResult(JSON.stringify(result, null, 2));
+      setError(null);
+    },
+    onError: (err: Error) => {
+      setError(err.message);
+      setMsgResult(null);
+    },
+  });
 
   return (
     <div style={{ padding: '2rem', fontFamily: 'system-ui, sans-serif' }}>
@@ -77,7 +72,7 @@ export function App() {
           <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
             <button
               data-testid="sign-tx-button"
-              onClick={handleSignTx}
+              onClick={() => signAndExecute()}
               disabled={isTxPending}
             >
               {isTxPending ? 'Signing...' : 'Sign & Execute Transaction'}
@@ -85,7 +80,7 @@ export function App() {
 
             <button
               data-testid="sign-msg-button"
-              onClick={handleSignMessage}
+              onClick={() => signMessage()}
               disabled={isMsgPending}
             >
               {isMsgPending ? 'Signing...' : 'Sign Personal Message'}

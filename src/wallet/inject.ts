@@ -40,6 +40,28 @@ export function buildInjectScript(config: InjectConfig): string {
     return bytes;
   }
 
+  // Resolve a transaction input to a base64 string.
+  // dApp Kit v2 passes a wrapper object with a toJSON() method
+  // that returns the base64-encoded built transaction bytes.
+  // Raw strings and Uint8Arrays are also handled for compatibility.
+  function resolveTransactionToBase64(transaction) {
+    if (typeof transaction === 'string') {
+      return Promise.resolve(transaction);
+    }
+    if (transaction instanceof Uint8Array) {
+      return Promise.resolve(uint8ArrayToBase64(transaction));
+    }
+    if (transaction && typeof transaction.toJSON === 'function') {
+      return Promise.resolve(transaction.toJSON()).then(function(result) {
+        if (typeof result === 'string') return result;
+        if (result instanceof Uint8Array) return uint8ArrayToBase64(result);
+        return uint8ArrayToBase64(new Uint8Array(result));
+      });
+    }
+    // Fallback: try to treat as array-like
+    return Promise.resolve(uint8ArrayToBase64(new Uint8Array(transaction)));
+  }
+
   // --- Account ---
 
   var publicKeyBytes = base64ToUint8Array('${publicKey}');
@@ -122,22 +144,14 @@ export function buildInjectScript(config: InjectConfig): string {
       'sui:signTransaction': {
         version: '2.0.0',
         signTransaction: function(input) {
-          var transaction = input.transaction;
-          // transaction is Uint8Array (built transaction bytes)
-          var txBase64;
-          if (typeof transaction === 'string') {
-            txBase64 = transaction;
-          } else if (transaction instanceof Uint8Array) {
-            txBase64 = uint8ArrayToBase64(transaction);
-          } else {
-            txBase64 = uint8ArrayToBase64(new Uint8Array(transaction));
-          }
-
-          return window.__pw_wallet_sign_tx(txBase64).then(function(sigBase64) {
-            return {
-              bytes: txBase64,
-              signature: sigBase64,
-            };
+          return resolveTransactionToBase64(input.transaction).then(function(txData) {
+            return window.__pw_wallet_sign_tx(txData).then(function(resultJson) {
+              var result = JSON.parse(resultJson);
+              return {
+                bytes: result.bytes,
+                signature: result.signature,
+              };
+            });
           });
         },
       },
@@ -145,18 +159,10 @@ export function buildInjectScript(config: InjectConfig): string {
       'sui:signAndExecuteTransaction': {
         version: '2.0.0',
         signAndExecuteTransaction: function(input) {
-          var transaction = input.transaction;
-          var txBase64;
-          if (typeof transaction === 'string') {
-            txBase64 = transaction;
-          } else if (transaction instanceof Uint8Array) {
-            txBase64 = uint8ArrayToBase64(transaction);
-          } else {
-            txBase64 = uint8ArrayToBase64(new Uint8Array(transaction));
-          }
-
-          return window.__pw_wallet_sign_and_exec(txBase64).then(function(resultJson) {
-            return JSON.parse(resultJson);
+          return resolveTransactionToBase64(input.transaction).then(function(txBase64) {
+            return window.__pw_wallet_sign_and_exec(txBase64).then(function(resultJson) {
+              return JSON.parse(resultJson);
+            });
           });
         },
       },

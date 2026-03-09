@@ -1,5 +1,6 @@
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
-import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
+import { SuiGrpcClient } from '@mysten/sui/grpc';
+import { Transaction } from '@mysten/sui/transactions';
 import { fromBase64, toBase64 } from '@mysten/sui/utils';
 import type { Page } from '@playwright/test';
 import { buildInjectScript } from './inject.js';
@@ -12,7 +13,7 @@ import {
 } from './types.js';
 
 /**
- * Node-side wallet manager. Holds the Ed25519 keypair and SuiClient,
+ * Node-side wallet manager. Holds the Ed25519 keypair and SuiGrpcClient,
  * exposes bridge functions to Playwright pages, and injects the mock
  * wallet registration script.
  *
@@ -21,7 +22,7 @@ import {
  */
 export class WalletManager {
   private keypair: Ed25519Keypair;
-  private client: SuiClient;
+  private client: SuiGrpcClient;
   private _address: string;
   private _publicKeyBase64: string;
   private _network: SuiNetwork;
@@ -32,11 +33,15 @@ export class WalletManager {
     // --- Keypair ---
     if (config.privateKey) {
       // Accept hex (0x-prefixed or raw) or base64
-      const keyBytes = config.privateKey.startsWith('0x')
+      let keyBytes = config.privateKey.startsWith('0x')
         ? hexToBytes(config.privateKey.slice(2))
         : isBase64(config.privateKey)
           ? fromBase64(config.privateKey)
           : hexToBytes(config.privateKey);
+      // Strip Sui keystore scheme flag byte (0x00=Ed25519, 0x01=Secp256k1, 0x02=Secp256r1)
+      if (keyBytes.length === 33 && keyBytes[0] <= 0x02) {
+        keyBytes = keyBytes.slice(1);
+      }
       this.keypair = Ed25519Keypair.fromSecretKey(keyBytes);
     } else if (config.mnemonic) {
       this.keypair = Ed25519Keypair.deriveKeypair(config.mnemonic);
@@ -47,7 +52,10 @@ export class WalletManager {
     // --- Network / RPC ---
     this._network = config.network ?? 'localnet';
     this._rpcUrl = config.rpcUrl ?? NETWORK_URLS[this._network];
-    this.client = new SuiClient({ url: this._rpcUrl });
+    this.client = new SuiGrpcClient({
+      network: this._network,
+      baseUrl: this._rpcUrl,
+    });
 
     // --- Derived info ---
     this._address = this.keypair.getPublicKey().toSuiAddress();
@@ -72,7 +80,7 @@ export class WalletManager {
     return this._publicKeyBase64;
   }
 
-  get suiClient(): SuiClient {
+  get suiClient(): SuiGrpcClient {
     return this.client;
   }
 
@@ -87,7 +95,7 @@ export class WalletManager {
 
   async getBalance(): Promise<bigint> {
     const result = await this.client.getBalance({ owner: this._address });
-    return BigInt(result.totalBalance);
+    return BigInt(result.balance.balance);
   }
 
   /** Request SUI from the localnet faucet. Only works on localnet. */
@@ -190,27 +198,63 @@ export class WalletManager {
   // ── Bridge handlers (called from browser via exposeFunction) ─────
 
   /**
-   * Sign transaction bytes. Called by the browser-side wallet when
-   * dApp Kit invokes sui:signTransaction.
+   * Build a Transaction from either JSON or base64 BCS bytes.
+   * dApp Kit v2 sends JSON (from toJSON()), older code may send base64 BCS.
    */
-  private async handleSignTx(txBytesBase64: string): Promise<string> {
-    const bytes = fromBase64(txBytesBase64);
-    const { signature } = await this.keypair.signTransaction(bytes);
-    return signature;
+  private async buildTransaction(input: string): Promise<Uint8Array> {
+    const isJson = input.trimStart().startsWith('{');
+    if (isJson) {
+      const tx = Transaction.from(input);
+      return await tx.build({ client: this.client });
+    }
+    return fromBase64(input);
   }
 
   /**
-   * Sign and execute transaction bytes. Called by the browser-side wallet
-   * when dApp Kit invokes sui:signAndExecuteTransaction.
+   * Sign transaction bytes. Called by the browser-side wallet when
+   * dApp Kit invokes sui:signTransaction.
+   * Returns JSON with { signature, bytes } where bytes is base64 BCS.
    */
-  private async handleSignAndExec(txBytesBase64: string): Promise<string> {
-    const bytes = fromBase64(txBytesBase64);
+  private async handleSignTx(txInput: string): Promise<string> {
+    const bytes = await this.buildTransaction(txInput);
     const { signature } = await this.keypair.signTransaction(bytes);
-    const result = await this.client.executeTransactionBlock({
-      transactionBlock: txBytesBase64,
-      signature,
+    return JSON.stringify({ signature, bytes: toBase64(bytes) });
+  }
+
+  /**
+   * Sign and execute transaction. Called by the browser-side wallet
+   * when dApp Kit invokes sui:signAndExecuteTransaction.
+   * Accepts either JSON (v2 wallet standard) or base64 BCS bytes.
+   * Returns the Wallet Standard v2 response format:
+   *   { digest, bytes, signature, effects }
+   */
+  private async handleSignAndExec(txInput: string): Promise<string> {
+    const bytes = await this.buildTransaction(txInput);
+    const { signature } = await this.keypair.signTransaction(bytes);
+    const result = await this.client.executeTransaction({
+      transaction: bytes,
+      signatures: [signature],
+      include: { effects: true },
     });
-    return JSON.stringify(result, bigIntReplacer);
+
+    // Unwrap discriminated union
+    const tx = result.$kind === 'Transaction'
+      ? result.Transaction
+      : result.FailedTransaction;
+
+    if (!tx) throw new Error('Transaction execution returned no result');
+    if (tx.status && !tx.status.success) {
+      throw new Error(`Transaction failed: ${JSON.stringify(tx.status.error)}`);
+    }
+
+    // Wallet Standard v2 response format
+    const walletResponse = {
+      digest: tx.digest,
+      bytes: toBase64(bytes),
+      signature: signature,
+      effects: tx.effects?.bcs ? toBase64(tx.effects.bcs) : '',
+    };
+    return JSON.stringify(walletResponse, bigIntReplacer);
   }
 
   /**

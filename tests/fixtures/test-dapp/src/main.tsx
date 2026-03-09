@@ -1,26 +1,41 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { SuiClientProvider, WalletProvider } from '@mysten/dapp-kit';
-import { getFullnodeUrl } from '@mysten/sui/client';
+import { createDAppKit, DAppKitProvider } from '@mysten/dapp-kit-react';
+import { SuiGrpcClient } from '@mysten/sui/grpc';
 import { App } from './App';
 
 const queryClient = new QueryClient();
 
-const networks = {
-  localnet: { url: getFullnodeUrl('localnet') },
-  testnet: { url: getFullnodeUrl('testnet') },
-  devnet: { url: getFullnodeUrl('devnet') },
+const NETWORK_URLS: Record<string, string> = {
+  localnet: 'http://127.0.0.1:9000',
+  testnet: 'https://fullnode.testnet.sui.io:443',
+  devnet: 'https://fullnode.devnet.sui.io:443',
 };
+
+const dAppKit = createDAppKit({
+  networks: ['localnet', 'testnet', 'devnet'],
+  defaultNetwork: 'localnet',
+  createClient(network) {
+    return new SuiGrpcClient({
+      network,
+      baseUrl: NETWORK_URLS[network],
+    });
+  },
+});
+
+declare module '@mysten/dapp-kit-react' {
+  interface Register {
+    dAppKit: typeof dAppKit;
+  }
+}
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
-      <SuiClientProvider networks={networks} defaultNetwork="localnet">
-        <WalletProvider autoConnect>
-          <App />
-        </WalletProvider>
-      </SuiClientProvider>
+      <DAppKitProvider dAppKit={dAppKit}>
+        <App />
+      </DAppKitProvider>
     </QueryClientProvider>
   </React.StrictMode>,
 );
