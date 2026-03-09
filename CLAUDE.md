@@ -5,12 +5,14 @@ Mock Sui wallet for Playwright-based dApp testing. Injects a Wallet Standard-com
 ## Commands
 
 ```bash
-npm run build      # tsup → dist/
-npm run dev        # tsup --watch
-npm run test       # vitest run
-npm run test:watch # vitest
-npm run typecheck  # tsc --noEmit
-npm run lint       # tsc --noEmit (same as typecheck)
+npm run build            # tsup → dist/
+npm run dev              # tsup --watch
+npm run test             # vitest run (unit tests)
+npm run test:unit        # vitest run (unit tests)
+npm run test:integration # playwright test (requires test-dapp; localnet optional)
+npm run test:watch       # vitest
+npm run typecheck        # tsc --noEmit
+npm run lint             # tsc --noEmit (same as typecheck)
 ```
 
 ## Project Structure
@@ -31,9 +33,9 @@ src/
     └── helpers.ts        # clickConnect, waitForConnected, etc.
 
 tests/
-├── unit/                 # (ready for tests)
-├── integration/          # (ready for tests)
-└── fixtures/test-dapp/   # Minimal Vite + React + dApp Kit test app
+├── unit/                 # Vitest unit tests (no browser/network)
+├── integration/          # Playwright integration tests (browser + test-dapp)
+└── fixtures/test-dapp/   # Minimal Vite + React + dApp Kit React v2 test app
 ```
 
 ## Architecture
@@ -44,10 +46,18 @@ The private key **never leaves Node.js**. The browser gets a thin mock wallet th
 
 1. `WalletManager.inject(page)` calls `page.exposeFunction()` to create three bridges:
    - `__pw_wallet_sign_tx` → `keypair.signTransaction()`
-   - `__pw_wallet_sign_and_exec` → sign + `client.executeTransactionBlock()`
+   - `__pw_wallet_sign_and_exec` → sign + `client.executeTransaction()` (gRPC)
    - `__pw_wallet_sign_msg` → `keypair.signPersonalMessage()`
 2. An init script registers a Wallet Standard wallet that calls these bridges
 3. dApp Kit discovers the wallet via the standard event protocol
+
+### dApp Kit v2 Transaction Handling
+
+- dApp Kit v2 wraps transactions in objects with `.toJSON()` → `resolveTransactionToBase64()` in inject.ts handles this
+- `buildTransaction()` in manager.ts auto-detects JSON (from `.toJSON()`) vs base64 BCS
+- `handleSignTx` returns JSON `{signature, bytes}` (not bare signature)
+- `handleSignAndExec` uses `executeTransaction()` returning a discriminated union (`$kind: 'Transaction' | 'FailedTransaction'`)
+- Response format is Wallet Standard v2: `{digest, bytes, signature, effects}`
 
 ### Wallet Standard Registration (Two-Phase)
 
@@ -74,6 +84,8 @@ This ensures the wallet is registered regardless of script load order.
 - The standalone MCP server owns both browser and wallet in one process. You **cannot** use it alongside a separate Playwright MCP plugin (they'd create separate pages).
 - The wallet name in the injection script is hardcoded to `"Playwright Test Wallet"`. The `wallet_connect` tool's `walletName` parameter must match.
 - Base64 encoding in the injection script uses manual `btoa`/`atob` loops (no Node.js `Buffer` in browser).
+- `SuiGrpcClient` requires both `network` and `baseUrl` parameters.
+- `executeTransaction()` returns a discriminated union that must be unwrapped (`$kind: 'Transaction' | 'FailedTransaction'`).
 
 ## Exports
 
@@ -93,14 +105,14 @@ The standalone server (`src/mcp/server.ts`) provides 19 tools:
 
 ## Dependencies
 
-- `@mysten/sui` — Ed25519 keypairs, SuiClient, transaction signing
+- `@mysten/sui` v2 — `SuiGrpcClient` (from `@mysten/sui/grpc`), Ed25519 keypairs, Transaction, signing
 - `playwright` — browser automation (runtime)
 - `@playwright/test` — test fixtures (peer, optional)
 - `@modelcontextprotocol/sdk` — MCP server (peer, optional)
 
 ## Test dApp
 
-`tests/fixtures/test-dapp/` is a Vite + React + dApp Kit app. All interactive elements use `data-testid` attributes for reliable test targeting. Start it with:
+`tests/fixtures/test-dapp/` is a Vite + React + `@mysten/dapp-kit-react` v2 app. Uses `createDAppKit`, `DAppKitProvider`, and `useDAppKit()`. All interactive elements use `data-testid` attributes for reliable test targeting. Start it with:
 
 ```bash
 cd tests/fixtures/test-dapp && npm install && npm run dev
