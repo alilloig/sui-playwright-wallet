@@ -27,6 +27,8 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "test": "vitest run",
+    "test:unit": "vitest run",
+    "test:integration": "playwright test",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit"
