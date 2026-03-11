@@ -12,7 +12,8 @@
  *   "mcpServers": {
  *     "sui-wallet": {
  *       "command": "node",
- *       "args": ["./node_modules/sui-playwright-wallet/dist/mcp/server.js"]
+ *       "args": ["./node_modules/sui-playwright-wallet/dist/mcp/server.js"],
+ *       "env": { "DAPP_URL": "http://localhost:3000" }
  *     }
  *   }
  * }
@@ -24,6 +25,10 @@ import { chromium, type Browser, type BrowserContext, type Page } from 'playwrig
 import { z } from 'zod';
 import { WalletManager } from '../wallet/manager.js';
 import type { SuiNetwork } from '../wallet/types.js';
+
+// ── Config ───────────────────────────────────────────────────────────
+
+const DEFAULT_DAPP_URL = process.env.DAPP_URL ?? '';
 
 // ── State ────────────────────────────────────────────────────────────
 
@@ -317,15 +322,19 @@ server.tool(
   'wallet_setup',
   'Set up a mock Sui wallet. Creates a keypair (or uses provided key material), '
   + 'injects into the browser page, and returns the wallet address. '
-  + 'On localnet, auto-funds via faucet. Must call browser_navigate first.',
+  + 'On localnet, auto-funds via faucet. If dappUrl is provided (or DAPP_URL env var is set), '
+  + 'auto-navigates to the dApp after injection.',
   {
     privateKey: z.string().optional().describe('Hex or base64 private key'),
     mnemonic: z.string().optional().describe('BIP-39 mnemonic phrase'),
     network: z.enum(['localnet', 'devnet', 'testnet', 'mainnet']).optional()
       .describe('Target network (default: localnet)'),
     rpcUrl: z.string().optional().describe('Custom RPC URL'),
+    dappUrl: z.string().optional().describe(
+      'URL of the dApp to navigate to after setup (falls back to DAPP_URL env var)',
+    ),
   },
-  async ({ privateKey, mnemonic, network, rpcUrl }) => {
+  async ({ privateKey, mnemonic, network, rpcUrl, dappUrl }) => {
     const p = await ensureBrowser();
 
     walletManager = new WalletManager({
@@ -346,6 +355,12 @@ server.tool(
       }
     }
 
+    // Auto-navigate to dApp if URL is available
+    const resolvedUrl = dappUrl ?? DEFAULT_DAPP_URL;
+    if (resolvedUrl) {
+      await p.goto(resolvedUrl, { waitUntil: 'domcontentloaded' });
+    }
+
     return {
       content: [{
         type: 'text',
@@ -353,6 +368,7 @@ server.tool(
           address: walletManager.address,
           network: walletManager.network,
           publicKey: walletManager.publicKeyBase64,
+          ...(resolvedUrl ? { dappUrl: resolvedUrl } : {}),
           status: 'ready',
         }, null, 2),
       }],
@@ -393,8 +409,11 @@ server.tool(
       ?? '[data-testid="connect-button"], button:has-text("Connect Wallet"), button:has-text("Connect")';
     await p.locator(connectSel).first().click({ timeout: 5000 });
 
+    // Try wallet selection step — not all apps show a modal; some connect directly
     const walletSel = walletSelector ?? `text=${name}`;
-    await p.locator(walletSel).first().click({ timeout: 5000 });
+    await p.locator(walletSel).first().click({ timeout: 2000 }).catch(() => {
+      // No wallet selection modal — app likely connected on button click
+    });
 
     const connectedSel = connectedSelector
       ?? '[data-testid="account-address"], [data-testid="connected"]';

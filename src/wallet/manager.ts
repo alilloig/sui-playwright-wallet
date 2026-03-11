@@ -205,6 +205,9 @@ export class WalletManager {
     const isJson = input.trimStart().startsWith('{');
     if (isJson) {
       const tx = Transaction.from(input);
+      if (!tx.getData().sender) {
+        tx.setSender(this.keypair.getPublicKey().toSuiAddress());
+      }
       return await tx.build({ client: this.client });
     }
     return fromBase64(input);
