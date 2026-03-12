@@ -1,6 +1,6 @@
 {
   "name": "sui-playwright-wallet",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Mock Sui wallet for Playwright-based dApp testing. Injects a Wallet Standard-compliant wallet into the browser with signing delegated to Node.js via bridge functions.",
   "type": "module",
   "main": "./dist/index.js",
