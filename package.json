@@ -1,6 +1,6 @@
 {
   "name": "sui-playwright-wallet",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Mock Sui wallet for Playwright-based dApp testing. Injects a Wallet Standard-compliant wallet into the browser with signing delegated to Node.js via bridge functions.",
   "type": "module",
   "main": "./dist/index.js",
@@ -21,7 +21,8 @@
     "sui-wallet-mcp": "./dist/mcp/server.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "mcp.json"
   ],
   "scripts": {
     "build": "tsup",

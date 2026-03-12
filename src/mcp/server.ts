@@ -7,12 +7,15 @@
  * the same Playwright Page, which is the key requirement that prevents
  * using wallet tools alongside a separate Playwright MCP plugin.
  *
- * Usage in .mcp.json:
+ * Quick setup:
+ *   cp node_modules/sui-playwright-wallet/mcp.json .mcp.json
+ *
+ * Or manually add to your .mcp.json:
  * {
  *   "mcpServers": {
  *     "sui-wallet": {
- *       "command": "node",
- *       "args": ["./node_modules/sui-playwright-wallet/dist/mcp/server.js"],
+ *       "command": "npx",
+ *       "args": ["sui-wallet-mcp"],
  *       "env": { "DAPP_URL": "http://localhost:3000" }
  *     }
  *   }
