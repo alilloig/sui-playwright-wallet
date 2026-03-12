@@ -25,7 +25,7 @@ export default defineConfig([
     target: 'node18',
     // Bundle MCP SDK + Sui SDK into the server so it runs standalone.
     // Only playwright (must match the user's installed version) stays external.
-    noExternal: [/@modelcontextprotocol/, /@mysten/, /zod/],
+    noExternal: [/@modelcontextprotocol/, /@mysten/, /zod/, /yaml/],
     external: ['playwright'],
     banner: {
       js: '#!/usr/bin/env node',

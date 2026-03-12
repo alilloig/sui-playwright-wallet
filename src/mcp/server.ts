@@ -28,6 +28,7 @@ import { chromium, type Browser, type BrowserContext, type Page } from 'playwrig
 import { z } from 'zod';
 import { WalletManager } from '../wallet/manager.js';
 import type { SuiNetwork } from '../wallet/types.js';
+import { resolveWalletConfig } from '../wallet/resolve.js';
 
 // ── Config ───────────────────────────────────────────────────────────
 
@@ -341,12 +342,14 @@ server.tool(
   async ({ privateKey, mnemonic, network, rpcUrl, dappUrl }) => {
     const p = await ensureBrowser();
 
-    walletManager = new WalletManager({
+    const resolved = await resolveWalletConfig({
       privateKey: privateKey ?? undefined,
       mnemonic: mnemonic ?? undefined,
       network: (network as SuiNetwork) ?? undefined,
       rpcUrl: rpcUrl ?? undefined,
     });
+
+    walletManager = new WalletManager(resolved.config);
 
     await walletManager.inject(p);
 
@@ -374,6 +377,8 @@ server.tool(
           publicKey: walletManager.publicKeyBase64,
           ...(resolvedUrl ? { dappUrl: resolvedUrl } : {}),
           status: 'ready',
+          source: resolved.keySource,
+          message: resolved.message,
         }, null, 2),
       }],
     };

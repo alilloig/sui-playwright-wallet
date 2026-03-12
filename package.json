@@ -41,7 +41,8 @@
   },
   "dependencies": {
     "@mysten/sui": "^2.6.0",
-    "playwright": "^1.58.2"
+    "playwright": "^1.58.2",
+    "yaml": "^2.8.2"
   },
   "peerDependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",

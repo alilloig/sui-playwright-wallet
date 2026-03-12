@@ -1,6 +1,7 @@
 import type { Page } from '@playwright/test';
 import { WalletManager } from '../wallet/manager.js';
 import type { SuiNetwork, WalletState } from '../wallet/types.js';
+import { resolveWalletConfig } from '../wallet/resolve.js';
 
 /**
  * MCP tool schemas and handlers for the Sui Playwright wallet.
@@ -76,12 +77,14 @@ export function walletSetupHandler(
   options?: WalletSetupHandlerOptions,
 ) {
   return async (input: WalletSetupInput) => {
-    const manager = new WalletManager({
+    const resolved = await resolveWalletConfig({
       privateKey: input.privateKey,
       mnemonic: input.mnemonic,
       network: input.network,
       rpcUrl: input.rpcUrl,
     });
+
+    const manager = new WalletManager(resolved.config);
 
     const page = getPage();
     await manager.inject(page);
@@ -112,6 +115,8 @@ export function walletSetupHandler(
             publicKey: manager.publicKeyBase64,
             ...(resolvedUrl ? { dappUrl: resolvedUrl } : {}),
             status: 'ready',
+            source: resolved.keySource,
+            message: resolved.message,
           }),
         },
       ],

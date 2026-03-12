@@ -1,6 +1,7 @@
 import { test as base, type Page } from '@playwright/test';
 import { WalletManager } from '../wallet/manager.js';
 import type { SuiNetwork } from '../wallet/types.js';
+import { resolveWalletConfig } from '../wallet/resolve.js';
 import { clickConnect, waitForConnected } from './helpers.js';
 
 /**
@@ -42,13 +43,15 @@ export const test = base.extend<WalletFixtureOptions & WalletFixtures>({
 
   // Wallet fixture: creates a fresh WalletManager
   wallet: async ({ walletNetwork, walletPrivateKey }, use) => {
-    const wallet = new WalletManager({
+    const resolved = await resolveWalletConfig({
       network: walletNetwork,
       privateKey: walletPrivateKey,
     });
 
-    // Fund on localnet
-    if (walletNetwork === 'localnet') {
+    const wallet = new WalletManager(resolved.config);
+
+    // Fund on localnet (check resolved network, not fixture option)
+    if (wallet.network === 'localnet') {
       try {
         await wallet.requestFaucet();
       } catch {

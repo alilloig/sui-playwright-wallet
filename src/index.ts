@@ -11,6 +11,10 @@ export type {
 } from './wallet/types.js';
 export { NETWORK_URLS, LOCALNET_FAUCET_URL } from './wallet/types.js';
 
+// Resolution
+export { resolveWalletConfig } from './wallet/resolve.js';
+export type { ResolvedWalletConfig, KeySource, NetworkSource } from './wallet/types.js';
+
 // MCP tools
 export { registerWalletTools } from './mcp/register.js';
 export type { McpServerLike, RegisterWalletToolsOptions } from './mcp/register.js';

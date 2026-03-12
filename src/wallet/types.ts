@@ -55,3 +55,32 @@ export const NETWORK_URLS: Record<SuiNetwork, string> = {
 
 /** Localnet faucet endpoint. */
 export const LOCALNET_FAUCET_URL = 'http://127.0.0.1:9123/gas';
+
+// ── Resolution types ─────────────────────────────────────────────
+
+/** Identifies where key material was resolved from. */
+export type KeySource =
+  | 'explicit'
+  | 'env:SUI_PRIVATE_KEY'
+  | 'env:SUI_MNEMONIC'
+  | 'sui-cli-keystore'
+  | 'random-ephemeral';
+
+/** Identifies where the network was resolved from. */
+export type NetworkSource =
+  | 'explicit'
+  | 'env:SUI_NETWORK'
+  | 'sui-cli-config'
+  | 'default-localnet';
+
+/** Result of resolveWalletConfig() — a fully resolved config with provenance. */
+export interface ResolvedWalletConfig {
+  /** Fully resolved config, ready to pass to WalletManager constructor. */
+  config: WalletConfig;
+  /** Where the key material came from. */
+  keySource: KeySource;
+  /** Where the network was determined from. */
+  networkSource: NetworkSource;
+  /** Human-readable summary for MCP responses and debugging. */
+  message: string;
+}
