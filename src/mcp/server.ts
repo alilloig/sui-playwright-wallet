@@ -16,7 +16,7 @@
  *     "sui-wallet": {
  *       "command": "npx",
  *       "args": ["sui-wallet-mcp"],
- *       "env": { "DAPP_URL": "http://localhost:3000" }
+ *       "env": { "DAPP_URL": "http://localhost:3000", "HEADLESS": "true" }
  *     }
  *   }
  * }
@@ -45,7 +45,8 @@ const consoleLogs: Array<{ type: string; text: string }> = [];
 
 async function ensureBrowser(): Promise<Page> {
   if (!browser) {
-    browser = await chromium.launch({ headless: true });
+    // Default headless; set HEADLESS=false to see the browser
+    browser = await chromium.launch({ headless: process.env.HEADLESS !== 'false' });
     context = await browser.newContext();
     page = await context.newPage();
 

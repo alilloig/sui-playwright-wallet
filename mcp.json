@@ -4,7 +4,8 @@
       "command": "npx",
       "args": ["sui-wallet-mcp"],
       "env": {
-        "DAPP_URL": "http://localhost:3000"
+        "DAPP_URL": "",
+        "HEADLESS": "true"
       }
     }
   }

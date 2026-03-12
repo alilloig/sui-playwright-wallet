@@ -89,7 +89,23 @@ await wallet.inject(page);
 await page.goto('http://localhost:5173');
 ```
 
-### As an MCP Server (Claude Code / AI Agents)
+### As a Claude Code Plugin
+
+Install the `sui-wallet` plugin for zero-config MCP integration:
+
+```bash
+claude plugin add ~/workspace/claudefiles/plugins/sui-wallet
+```
+
+Then use the `/sui-wallet` command for guided setup:
+
+```
+/sui-wallet http://localhost:5173 localnet
+```
+
+The plugin registers the MCP server automatically — no `.mcp.json` editing required.
+
+### As an MCP Server (Manual Configuration)
 
 The library ships with a standalone MCP server that provides both browser control and wallet tools in a single process. Add to your project's `.mcp.json`:
 
@@ -97,12 +113,15 @@ The library ships with a standalone MCP server that provides both browser contro
 {
   "mcpServers": {
     "sui-wallet": {
-      "command": "node",
-      "args": ["./node_modules/sui-playwright-wallet/dist/mcp/server.js"]
+      "command": "npx",
+      "args": ["sui-wallet-mcp"],
+      "env": { "DAPP_URL": "http://localhost:5173", "HEADLESS": "true" }
     }
   }
 }
 ```
+
+Set `HEADLESS=false` to open a visible browser window (useful for debugging).
 
 This gives AI agents 19 tools for browser automation + wallet operations:
 
@@ -120,12 +139,19 @@ If you already have an MCP server and want to add wallet tools:
 
 ```typescript
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { registerWalletTools } from 'sui-playwright-wallet';
+import { registerWalletTools } from 'sui-playwright-wallet/mcp';
 
 const server = new McpServer({ name: 'my-server', version: '1.0.0' });
 
-// Register all 4 wallet tools with one call
+// Simple: just pass a getPage callback
 registerWalletTools(server, () => currentPage);
+
+// Or with options: auto-navigate to dApp after wallet injection
+registerWalletTools(server, {
+  getPage: () => currentPage,
+  dappUrl: 'http://localhost:5173',
+  defaultNetwork: 'localnet',
+});
 ```
 
 ## API

@@ -1,4 +1,5 @@
 import type { Page } from '@playwright/test';
+import type { SuiNetwork } from '../wallet/types.js';
 import {
   createInitialState,
   walletSetupSchema,
@@ -12,34 +13,59 @@ import {
 } from './tools.js';
 
 /**
+ * Options for registerWalletTools when using the options-object form.
+ */
+export interface RegisterWalletToolsOptions {
+  /** Function that returns the current Playwright Page. */
+  getPage: () => Page;
+  /** Default dApp URL — passed to wallet_setup for auto-navigation. */
+  dappUrl?: string;
+  /** Default Sui network for wallet_setup. */
+  defaultNetwork?: SuiNetwork;
+}
+
+/**
  * Register all wallet MCP tools with an MCP server instance.
  *
  * @param server - An MCP server with a `tool(name, schema, handler)` method.
  *                 Compatible with @modelcontextprotocol/sdk's McpServer.
- * @param getPage - Function that returns the current Playwright Page.
- *                  Called lazily when a tool is invoked, so the page
- *                  can change between calls (e.g. after navigation).
+ * @param getPageOrOptions - Either a function returning the current Page,
+ *                           or an options object with getPage + defaults.
  *
  * @example
  * ```typescript
  * import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
- * import { registerWalletTools } from 'sui-playwright-wallet';
+ * import { registerWalletTools } from 'sui-playwright-wallet/mcp';
  *
- * const server = new McpServer({ name: 'my-server', version: '1.0.0' });
+ * // Simple: just pass a getPage callback
  * registerWalletTools(server, () => currentPage);
+ *
+ * // With options: auto-navigate + default network
+ * registerWalletTools(server, {
+ *   getPage: () => currentPage,
+ *   dappUrl: 'http://localhost:5173',
+ *   defaultNetwork: 'localnet',
+ * });
  * ```
  */
 export function registerWalletTools(
   server: McpServerLike,
-  getPage: () => Page,
+  getPageOrOptions: (() => Page) | RegisterWalletToolsOptions,
 ): void {
+  const getPage = typeof getPageOrOptions === 'function'
+    ? getPageOrOptions
+    : getPageOrOptions.getPage;
+  const options = typeof getPageOrOptions === 'function'
+    ? undefined
+    : getPageOrOptions;
+
   const state = createInitialState();
 
   server.tool(
     walletSetupSchema.name,
     walletSetupSchema.description,
     walletSetupSchema.inputSchema,
-    walletSetupHandler(getPage, state),
+    walletSetupHandler(getPage, state, options ? { dappUrl: options.dappUrl } : undefined),
   );
 
   server.tool(

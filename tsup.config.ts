@@ -6,6 +6,7 @@ export default defineConfig([
     entry: {
       index: 'src/index.ts',
       'playwright/fixtures': 'src/playwright/fixtures.ts',
+      'mcp/register': 'src/mcp/register.ts',
     },
     format: ['esm'],
     dts: true,

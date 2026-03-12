@@ -28,7 +28,8 @@ export const walletSetupSchema = {
   description:
     'Set up a mock Sui wallet for testing. Creates a keypair (or uses provided key material), ' +
     'injects the mock wallet into the current browser page, and returns the wallet address. ' +
-    'On localnet, automatically funds the wallet via faucet.',
+    'On localnet, automatically funds the wallet via faucet. ' +
+    'If dappUrl is provided, auto-navigates to the dApp after injection.',
   inputSchema: {
     type: 'object' as const,
     properties: {
@@ -49,6 +50,10 @@ export const walletSetupSchema = {
         type: 'string',
         description: 'Custom RPC URL. Overrides the URL derived from network.',
       },
+      dappUrl: {
+        type: 'string',
+        description: 'URL of the dApp to navigate to after wallet injection.',
+      },
     },
   },
 } as const;
@@ -58,11 +63,17 @@ export interface WalletSetupInput {
   mnemonic?: string;
   network?: SuiNetwork;
   rpcUrl?: string;
+  dappUrl?: string;
+}
+
+export interface WalletSetupHandlerOptions {
+  dappUrl?: string;
 }
 
 export function walletSetupHandler(
   getPage: () => Page,
   state: WalletMcpState,
+  options?: WalletSetupHandlerOptions,
 ) {
   return async (input: WalletSetupInput) => {
     const manager = new WalletManager({
@@ -85,6 +96,12 @@ export function walletSetupHandler(
       }
     }
 
+    // Auto-navigate if dappUrl provided (input takes precedence over options)
+    const resolvedUrl = input.dappUrl ?? options?.dappUrl;
+    if (resolvedUrl) {
+      await page.goto(resolvedUrl, { waitUntil: 'domcontentloaded' });
+    }
+
     return {
       content: [
         {
@@ -93,6 +110,7 @@ export function walletSetupHandler(
             address: manager.address,
             network: manager.network,
             publicKey: manager.publicKeyBase64,
+            ...(resolvedUrl ? { dappUrl: resolvedUrl } : {}),
             status: 'ready',
           }),
         },

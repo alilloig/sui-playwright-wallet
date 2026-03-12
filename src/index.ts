@@ -13,7 +13,7 @@ export { NETWORK_URLS, LOCALNET_FAUCET_URL } from './wallet/types.js';
 
 // MCP tools
 export { registerWalletTools } from './mcp/register.js';
-export type { McpServerLike } from './mcp/register.js';
+export type { McpServerLike, RegisterWalletToolsOptions } from './mcp/register.js';
 export {
   walletSetupSchema,
   walletSetupHandler,
@@ -25,7 +25,7 @@ export {
   walletDisconnectHandler,
   createInitialState,
 } from './mcp/tools.js';
-export type { WalletMcpState } from './mcp/tools.js';
+export type { WalletMcpState, WalletSetupHandlerOptions } from './mcp/tools.js';
 
 // Playwright helpers (fixtures are a separate entry point)
 export {

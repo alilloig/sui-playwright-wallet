@@ -15,6 +15,11 @@
       "types": "./dist/playwright/fixtures.d.ts",
       "import": "./dist/playwright/fixtures.js",
       "default": "./dist/playwright/fixtures.js"
+    },
+    "./mcp": {
+      "types": "./dist/mcp/register.d.ts",
+      "import": "./dist/mcp/register.js",
+      "default": "./dist/mcp/register.js"
     }
   },
   "bin": {
